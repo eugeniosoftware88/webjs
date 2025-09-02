@@ -1,8 +1,6 @@
-import { pino, LoggerOptions } from "pino";
+import pino, { LoggerOptions, LevelWithSilent } from "pino";
 
-export default async function createLogger(
-  level: pino.LevelWithSilent = "info"
-) {
+export default async function createLogger(level: LevelWithSilent = "info") {
   const isProd = process.env.NODE_ENV === "production";
   let transport: LoggerOptions["transport"];
   if (!isProd) {
