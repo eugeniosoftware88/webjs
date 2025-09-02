@@ -1,7 +1,7 @@
 {
   "name": "medicit",
   "version": "1.0.0",
-  "description": "medicit: based on Whatsapp API",
+  "description": "Medicit Whatsapp API",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
@@ -13,7 +13,7 @@
     "whatsapp-api",
     "node.js"
   ],
-  "author": "Pedro",
+  "author": "Joseph Fernandes",
   "license": "MIT",
   "dependencies": {
     "@hapi/boom": "^10.0.1",
