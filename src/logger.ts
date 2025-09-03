@@ -1,8 +1,22 @@
-import pino, { LoggerOptions, LevelWithSilent } from "pino";
+import pino, {
+  Logger as PinoLogger,
+  LoggerOptions as PinoLoggerOptions,
+  LevelWithSilent,
+} from "pino";
 
-export default async function createLogger(level: LevelWithSilent = "info") {
+export type { PinoLogger, PinoLoggerOptions };
+
+type PendingLog = { level: "info" | "error"; msg: any };
+const pendingLogs: PendingLog[] = [];
+
+let logger: PinoLogger | undefined;
+
+export default async function createLogger(
+  level: LevelWithSilent = "info"
+): Promise<PinoLogger> {
   const isProd = process.env.NODE_ENV === "production";
-  let transport: LoggerOptions["transport"];
+  let transport: PinoLoggerOptions["transport"];
+
   if (!isProd) {
     try {
       const { createRequire } = await import("module");
@@ -12,7 +26,7 @@ export default async function createLogger(level: LevelWithSilent = "info") {
         target: "pino-pretty",
         options: {
           colorize: true,
-          translateTime: "HH:MM:ss",
+          translateTime: "yyyy-mm-dd HH:MM:ss",
           ignore: "pid,hostname",
         },
       };
@@ -20,10 +34,53 @@ export default async function createLogger(level: LevelWithSilent = "info") {
       transport = undefined;
     }
   }
-  return pino({
+
+  const loggerOptions: PinoLoggerOptions = {
     level,
     base: undefined,
     redact: ["req.headers.authorization"],
     transport,
-  });
+  };
+
+  logger = pino(loggerOptions);
+  return logger;
+}
+
+export function getLogger(): PinoLogger | undefined {
+  return logger;
+}
+
+export function logInfo(...args: any[]) {
+  const msg = args.length === 1 ? args[0] : args;
+  if (logger) logger.info(msg);
+  else pendingLogs.push({ level: "info", msg });
+}
+
+export function logError(...args: any[]) {
+  const msg = args.length === 1 ? args[0] : args;
+  if (logger) logger.error(msg);
+  else pendingLogs.push({ level: "error", msg });
+}
+
+export function flushPending() {
+  if (!logger || !pendingLogs.length) return;
+  for (const pl of pendingLogs) {
+    pl.level === "error" ? logger.error(pl.msg) : logger.info(pl.msg);
+  }
+  pendingLogs.length = 0;
+}
+
+export function logConnectionUpdateFase(
+  fase: string,
+  extra?: any,
+  LOG_CONN_VERBOSE?: string
+) {
+  const verbose = /^(true)$/i.test(
+    LOG_CONN_VERBOSE || process.env.LOG_CONN_VERBOSE || "false"
+  );
+  const noisy = ["connecting", "syncing", "resuming", "qr"];
+  if (!verbose && noisy.includes(fase)) return;
+  const payload = { evento: "connection.update", fase, ...extra };
+  if (logger) logger.info(payload);
+  else pendingLogs.push({ level: "info", msg: payload });
 }
