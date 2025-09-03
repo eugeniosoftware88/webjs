@@ -1,6 +1,7 @@
 baileys_auth_info
 dist
 node_modules
+reports
 dynamic-config.json
 package-lock.json
 .env

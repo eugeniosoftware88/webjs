@@ -1,0 +1,24 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "setupFilesAfterEnv": ["<rootDir>/tests/setup.ts"],
+  "testMatch": ["**/tests/safe.test.ts", "**/tests/painel-test.test.ts"],
+  "testTimeout": 30000,
+  "verbose": true,
+  "reporters": [
+    "default",
+    [
+      "jest-html-reporter",
+      {
+        "pageTitle": "🏥 Medicit - Relatório de Testes",
+        "outputPath": "./reports/test-report.html",
+        "includeFailureMsg": true,
+        "includeSuiteFailure": true,
+        "theme": "defaultTheme",
+        "logo": "https://placehold.co/600x400?text=MEDICIT",
+        "executionTimeWarningThreshold": 5,
+        "dateFormat": "dd/mm/yyyy HH:MM:ss"
+      }
+    ]
+  ]
+}
