@@ -6,9 +6,12 @@ import {
   PAIRING_MIN_REUSE_REMAINING_MS,
   MAX_AUTO_PAIR_ATTEMPTS,
   AUTO_PAIR_COOLDOWN_MS,
+  ADMIN_TOKEN,
 } from "./config";
+import { dynamicConfig } from "./dynamicConfig";
 import { logInfo, logError } from "./logger";
 import { Server as SocketIOServer } from "socket.io";
+import { resumeReconnections, startBaileys } from "./initWa";
 
 let lastPairing:
   | { phone: string; code: string; at: Date; expiresAt?: Date }
@@ -56,7 +59,12 @@ export function scheduleAutoPair(
   sock: WASocket | undefined,
   initialDelay = 1200
 ) {
-  if (!PAIR_PHONE) return;
+  if (ADMIN_TOKEN) {
+    return;
+  }
+
+  const currentPairPhone = dynamicConfig.getPairPhone() || PAIR_PHONE;
+  if (!currentPairPhone) return;
   if (autoPairAttempts > 0 && lastPairing) return;
   setTimeout(() => {
     attemptAutoPair(sock);
@@ -70,8 +78,16 @@ export async function attemptAutoPair(
 ) {
   if (!sock) return;
   if (sock.authState.creds.registered) return;
-  if (!PAIR_PHONE) return;
-  const phone = PAIR_PHONE.replace(/\D/g, "");
+
+  if (ADMIN_TOKEN && !force) {
+    logInfo("Auto-pair bloqueado: modo admin ativo");
+    return;
+  }
+
+  const currentPairPhone = dynamicConfig.getPairPhone() || PAIR_PHONE;
+  if (!currentPairPhone) return;
+
+  const phone = currentPairPhone.replace(/\D/g, "");
   try {
     const nowTs = Date.now();
     if (!force) {
@@ -250,4 +266,100 @@ export function getAutoPairAttempts() {
 
 export function resetAutoPairAttempts() {
   autoPairAttempts = 0;
+}
+
+export async function generatePairingCodeAdmin(
+  sock: WASocket,
+  phone: string,
+  io?: SocketIOServer
+): Promise<{
+  ok: boolean;
+  pairingCode?: string;
+  phone?: string;
+  expiresAt?: Date;
+  error?: string;
+}> {
+  try {
+    resumeReconnections();
+
+    if (!sock) {
+      logInfo("Socket não disponível para pareamento, reiniciando conexão...");
+      if (io) {
+        await startBaileys(io, true);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      return {
+        ok: false,
+        error:
+          "Socket sendo reinicializado. Tente novamente em alguns segundos.",
+      };
+    }
+
+    if (sock.authState.creds.registered) {
+      return {
+        ok: false,
+        error: "Sessao ja registrada. Reset a sessao para novo pareamento.",
+      };
+    }
+
+    if (!dynamicConfig.canRequestPairingCode()) {
+      const remaining = dynamicConfig.getRemainingPairingAttempts();
+      const timeUntilReset = dynamicConfig.getTimeUntilPairingReset();
+      return {
+        ok: false,
+        error: `Limite de tentativas atingido. Aguarde ${Math.ceil(
+          timeUntilReset / (1000 * 60)
+        )} minutos ou use QR Code.`,
+      };
+    }
+
+    const cleanPhone = phone.replace(/\D/g, "");
+    const code = await sock.requestPairingCode(cleanPhone);
+
+    const nowTs = Date.now();
+    lastPairing = {
+      phone: cleanPhone,
+      code,
+      at: new Date(nowTs),
+      expiresAt: new Date(nowTs + PAIRING_CODE_TTL_MS),
+    };
+
+    lastPairingCodeAt = nowTs;
+    dynamicConfig.addPairingAttempt();
+
+    clearPairingRefreshTimer();
+    schedulePairingRefresh(sock);
+
+    try {
+      const { resumeReconnections } = await import("./initWa.js");
+      resumeReconnections();
+    } catch (err) {
+      logError("Erro ao retomar reconexoes", err);
+    }
+
+    if (io) {
+      io.emit("pairing_code", code);
+    }
+
+    logInfo(`Pairing code gerado para ${cleanPhone}: ${code}`);
+
+    return {
+      ok: true,
+      pairingCode: code,
+      phone: cleanPhone,
+      expiresAt: lastPairing.expiresAt,
+    };
+  } catch (e: any) {
+    logError("Erro ao gerar codigo de pareamento administrativo", e);
+    return { ok: false, error: e.message };
+  }
+}
+
+export function getPairingInfo() {
+  return {
+    attempts: dynamicConfig.getPairingAttemptsCount(),
+    remainingAttempts: dynamicConfig.getRemainingPairingAttempts(),
+    timeUntilReset: dynamicConfig.getTimeUntilPairingReset(),
+    canRequestCode: dynamicConfig.canRequestPairingCode(),
+  };
 }

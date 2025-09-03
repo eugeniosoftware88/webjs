@@ -11,6 +11,7 @@ import {
   PAIR_PHONE,
   LOG_CONN_VERBOSE,
   MAX_RECONNECT_DELAY,
+  ADMIN_TOKEN,
 } from "./config";
 import {
   logInfo,
@@ -54,6 +55,9 @@ let connectionState: string | undefined;
 let starting = false;
 let reconnectTimer: NodeJS.Timeout | undefined;
 let lastStartAt: number | undefined;
+let shouldEmitQR = false;
+let isManualReset = false;
+let shouldStopReconnecting = false;
 
 const waLogger = pino({
   level: WA_LOG_LEVEL,
@@ -77,18 +81,18 @@ const DISCONNECT_REASONS: Record<number, FriendlyReason> = {
     chave: "forbidden",
     titulo: "Acesso negado (forbidden)",
     sugestao:
-      "Verifique se a conta nao esta bloqueada ou com restriçaes no WhatsApp",
+      "Verifique se a conta nao esta bloqueada ou com restricaes no WhatsApp",
   },
   408: {
     chave: "connectionLost|timedOut",
     titulo: "Conexao perdida ou tempo excedido (timeout)",
-    sugestao: "Verificar conectividade de rede e latência",
+    sugestao: "Verificar conectividade de rede e latencia",
   },
   411: {
     chave: "multideviceMismatch",
     titulo: "Incompatibilidade de multi-dispositivo",
     sugestao:
-      "Atualize a versao do Baileys ou refaça o pareamento em ambiente atualizado",
+      "Atualize a versao do Baileys ou refaca o pareamento em ambiente atualizado",
   },
   428: {
     chave: "connectionClosed",
@@ -98,7 +102,7 @@ const DISCONNECT_REASONS: Record<number, FriendlyReason> = {
   440: {
     chave: "connectionReplaced",
     titulo: "Sessao substituada por outra conexao",
-    sugestao: "Verifique se outra instância esta usando as mesmas credenciais",
+    sugestao: "Verifique se outra instancia esta usando as mesmas credenciais",
   },
   500: {
     chave: "badSession",
@@ -107,7 +111,7 @@ const DISCONNECT_REASONS: Record<number, FriendlyReason> = {
   },
   503: {
     chave: "unavailableService",
-    titulo: "Serviço temporariamente indisponavel",
+    titulo: "Servico temporariamente indisponavel",
     sugestao: "Aguardar alguns segundos e permitir retentativa",
   },
   515: {
@@ -133,7 +137,7 @@ function friendlyDisconnect(statusCode?: number, rawMessage?: string) {
       codigo: statusCode,
       chave: "naoMapeado",
       titulo: `Cadigo de desconexao nao mapeado (${statusCode})`,
-      sugestao: "Verificar documentaçao do Baileys ou atualizar mapeamento",
+      sugestao: "Verificar documentacao do Baileys ou atualizar mapeamento",
       rawMessage,
     };
   }
@@ -162,27 +166,102 @@ async function ensureBaileysLoaded() {
 
 async function maybePurgeStaleSession() {
   try {
+    if (ADMIN_TOKEN) {
+      if (sock) {
+        const isRegistered = !!sock.authState.creds.registered;
+        const hasCredentials = !!(
+          sock.authState.creds.noiseKey || sock.authState.creds.me
+        );
+
+        if (isRegistered || hasCredentials || connectionState === "open") {
+          logInfo({
+            evento: "session.purge.skip",
+            motivo: "admin_mode_active_session",
+            isRegistered,
+            hasCredentials,
+            connectionState,
+          });
+          return;
+        }
+      }
+
+      const sessionDir = path.resolve(SESSION_FOLDER);
+      const exists = await fs.stat(sessionDir).catch(() => undefined);
+      if (!exists) return;
+
+      const ageMs = Date.now() - exists.mtimeMs;
+      if (ageMs < 3600000) {
+        logInfo({
+          evento: "session.purge.skip",
+          motivo: "admin_mode_preserve_orphan_files",
+          ageMs,
+        });
+        return;
+      }
+
+      await fs.rm(sessionDir, { recursive: true, force: true });
+      logInfo({
+        evento: "session.purge.preStart",
+        motivo: "admin_mode_very_old_orphan",
+        ageMs,
+      });
+      return;
+    }
+
+    if (sock) {
+      const isRegistered = !!sock.authState.creds.registered;
+      const hasCredentials = !!(
+        sock.authState.creds.noiseKey || sock.authState.creds.me
+      );
+
+      if (isRegistered || hasCredentials || connectionState === "open") {
+        logInfo({
+          evento: "session.purge.skip",
+          motivo: "socket_has_valid_session",
+          isRegistered,
+          hasCredentials,
+          connectionState,
+        });
+        return;
+      }
+    }
+
     const sessionDir = path.resolve(SESSION_FOLDER);
     const credsFile = path.join(sessionDir, "creds.json");
     const exists = await fs.stat(credsFile).catch(() => undefined);
     if (!exists) return;
+
     const raw = await fs.readFile(credsFile, "utf8").catch(() => undefined);
     if (!raw) return;
+
     try {
       const parsed = JSON.parse(raw);
       const registered = !!parsed?.registered;
+      const hasValidCreds = !!(parsed?.noiseKey || parsed?.me);
       const ageMs = Date.now() - exists.mtimeMs;
-      if (!registered) {
+
+      if (ageMs < 300000) {
+        logInfo({
+          evento: "session.purge.skip",
+          motivo: "recent_session_files",
+          ageMs,
+        });
+        return;
+      }
+
+      if (!registered && !hasValidCreds) {
         await fs.rm(sessionDir, { recursive: true, force: true });
         logInfo({
           evento: "session.purge.preStart",
-          motivo: "unregistered",
+          motivo: "no_valid_session_data",
           ageMs,
         });
       } else {
         logInfo({
           evento: "session.purge.skip",
-          motivo: "registered",
+          motivo: "has_valid_session_data",
+          registered,
+          hasValidCreds,
           ageMs,
         });
       }
@@ -235,11 +314,20 @@ export function cleanupCurrentSocket(reason?: string) {
   sock = undefined;
 }
 
-export async function startBaileys(io: SocketIOServer) {
+export async function startBaileys(
+  io: SocketIOServer,
+  forceRestart: boolean = false
+) {
   if (starting) {
     waLogger.debug("startBaileys ignorado - ja em andamento");
     return;
   }
+
+  if (ADMIN_TOKEN && shouldStopReconnecting && !forceRestart) {
+    logInfo("Reconexao pausada no modo admin - aguardando pareamento manual");
+    return;
+  }
+
   starting = true;
   await ensureBaileysLoaded();
   lastStartAt = Date.now();
@@ -293,6 +381,32 @@ export async function startBaileys(io: SocketIOServer) {
   }
 
   if (sock) sock.ev.on("creds.update", saveCreds);
+
+  if (sock)
+    sock.ev.on("creds.update", async () => {
+      if (sock?.authState.creds.registered) {
+        try {
+          await saveCreds();
+        } catch (error) {
+          logError("Erro ao salvar credenciais de sessao registrada", error);
+        }
+
+        const meJid =
+          sock?.user?.id || sock?.authState.creds.me?.id || "desconhecido";
+        let numero = meJid;
+        if (numero !== "desconhecido") {
+          numero = numero.split("@")[0].split(":")[0];
+        }
+
+        io.emit("connection_update", {
+          connected: connectionState === "open",
+          connecting: connectionState === "connecting",
+          user: numero !== "desconhecido" ? numero : undefined,
+          registered: true,
+        });
+      }
+    });
+
   if (!state.creds.registered && PAIR_PHONE) {
     waLogger.debug("Agendando auto pairing inicial (sessao nao registrada)");
     scheduleAutoPair(sock, 2000);
@@ -312,17 +426,40 @@ export async function startBaileys(io: SocketIOServer) {
             { info: "Estado intermediario" },
             LOG_CONN_VERBOSE
           );
+
+          const statusToEmit = {
+            connected: false,
+            connecting: connection === "connecting",
+            user: undefined,
+            registered: !!sock?.authState.creds.registered,
+          };
+
+          io.emit("connection_update", statusToEmit);
         }
 
         if (qr) {
           logConnectionUpdateFase(
             "qr",
             {
-              ignorado: true,
-              motivo: "fallback_desabilitado",
+              disponivel: true,
+              auto_emit: shouldEmitQR,
             },
             LOG_CONN_VERBOSE
           );
+
+          if (shouldEmitQR) {
+            try {
+              const QRCode = await import("qrcode");
+              const qrCodeDataURL = await QRCode.toDataURL(qr);
+              io.emit("qr_code", qrCodeDataURL);
+              logInfo("QR Code gerado");
+              shouldEmitQR = false;
+            } catch (error) {
+              logError("Erro ao gerar QR Code para socket", error);
+            }
+          } else {
+            shouldEmitQR = false;
+          }
         }
 
         if (connection === "open") {
@@ -343,6 +480,24 @@ export async function startBaileys(io: SocketIOServer) {
           const logger = getLogger();
           logger?.info(`Sessao conectada com o numero ${numero}`);
           io.emit("message", "Sessao pronta.");
+
+          io.emit("connection_update", {
+            connected: true,
+            connecting: false,
+            user: numero !== "desconhecido" ? numero : undefined,
+            registered: !!sock?.authState.creds.registered,
+          });
+
+          resetPairingState();
+
+          if (sock?.authState.creds.registered) {
+            try {
+              await saveCreds();
+            } catch (error) {
+              logError("Erro ao salvar credenciais apos conexao", error);
+            }
+          }
+
           resetAutoPairAttempts();
           if (sock && !sock.authState.creds.registered && PAIR_PHONE) {
             scheduleAutoPair(sock, 1500);
@@ -381,14 +536,28 @@ export async function startBaileys(io: SocketIOServer) {
             });
           }
 
+          io.emit("connection_update", {
+            connected: false,
+            connecting: false,
+            user: undefined,
+            registered: !!sock?.authState.creds.registered,
+          });
+
           const critical =
             statusCode === DisconnectReason.badSession ||
             statusCode === DisconnectReason.forbidden ||
             statusCode === DisconnectReason.multideviceMismatch;
 
-          if (!loggedOut && !critical) {
+          const restartRequired = statusCode === 515;
+
+          if (!loggedOut && !critical && !isManualReset) {
             reconnectAttempts++;
-            const delay = calcDelay();
+
+            const baseDelay = restartRequired ? 500 : calcDelay();
+            const delay = restartRequired
+              ? baseDelay + reconnectAttempts * 200
+              : baseDelay;
+
             const motivo = rawMessage || "desconhecido";
             const logger = getLogger();
             logger?.warn(
@@ -413,7 +582,18 @@ export async function startBaileys(io: SocketIOServer) {
                   }s (tentativa ${reconnectAttempts})`
             );
             clearReconnectTimer();
-            reconnectTimer = setTimeout(() => startBaileys(io), delay);
+            reconnectTimer = setTimeout(() => startBaileys(io, false), delay);
+          } else if (isManualReset) {
+            logInfo("Apos reset manual - aguardando novo pareamento");
+            isManualReset = false;
+            reconnectAttempts = 0;
+
+            io.emit("connection_update", {
+              connected: false,
+              connecting: false,
+              user: undefined,
+              registered: false,
+            });
           } else {
             const wasRegistered = !!sock?.authState.creds.registered;
             const logger = getLogger();
@@ -421,7 +601,45 @@ export async function startBaileys(io: SocketIOServer) {
               { wasRegistered, rawMessage, statusCode },
               "Sessao finalizada (logged out)"
             );
-            const early = lastStartAt && Date.now() - lastStartAt < 7000;
+
+            io.emit("connection_update", {
+              connected: false,
+              connecting: false,
+              user: undefined,
+              registered: false,
+            });
+
+            if (ADMIN_TOKEN) {
+              shouldStopReconnecting = true;
+              reconnectAttempts = 0;
+
+              try {
+                cleanupCurrentSocket("logged_out_admin_mode");
+                await fs.rm(path.resolve(SESSION_FOLDER), {
+                  recursive: true,
+                  force: true,
+                });
+              } catch (e) {
+                const logger = getLogger();
+                logger?.error(
+                  { e },
+                  "Falha ao remover pasta de sessao no modo admin"
+                );
+              }
+
+              resetPairingState();
+
+              logInfo(
+                "Modo admin: sistema limpo e pronto para novo pareamento manual"
+              );
+
+              io.emit(
+                "message",
+                "Sessão finalizada. Sistema pronto para novo pareamento."
+              );
+              return;
+            }
+            const early = lastStartAt && Date.now() - lastStartAt < 700;
             if (early) {
               resetPairingState();
             }
@@ -449,7 +667,7 @@ export async function startBaileys(io: SocketIOServer) {
                 resetPairingState();
                 if (early) await new Promise((r) => setTimeout(r, 1500));
                 try {
-                  await startBaileys(io);
+                  await startBaileys(io, false);
                 } catch (e2) {
                   const logger = getLogger();
                   logger?.error({ e2 }, "Falha ao reiniciar apos limpeza");
@@ -550,13 +768,23 @@ export async function startBaileys(io: SocketIOServer) {
 
 export async function resetSession(io: SocketIOServer) {
   try {
+    isManualReset = true;
+    shouldStopReconnecting = false;
     cleanupCurrentSocket("manual_reset");
     await fs.rm(path.resolve(SESSION_FOLDER), { recursive: true, force: true });
     resetPairingState();
     restartScheduled = true;
+
+    io.emit("connection_update", {
+      connected: false,
+      connecting: false,
+      user: undefined,
+      registered: false,
+    });
+
     setTimeout(async () => {
       try {
-        await startBaileys(io);
+        await startBaileys(io, false);
         restartScheduled = false;
         if (sock && !sock.authState.creds.registered && PAIR_PHONE)
           scheduleAutoPair(sock, 1200);
@@ -572,14 +800,37 @@ export async function resetSession(io: SocketIOServer) {
   }
 }
 
+export function resumeReconnections() {
+  shouldStopReconnecting = false;
+}
+
 export function getConnectionStatus() {
+  const socketStatus = sock
+    ? {
+        isActive: !!sock,
+        registered: !!sock.authState.creds.registered,
+        hasCredentials: !!(
+          sock.authState.creds.noiseKey || sock.authState.creds.me
+        ),
+        userId: sock.authState.creds.me?.id || sock.user?.id,
+      }
+    : {
+        isActive: false,
+        registered: false,
+        hasCredentials: false,
+        userId: undefined,
+      };
+
   return {
     ok: true,
     connection: connectionState,
-    registered: !!sock?.authState.creds.registered,
+    registered: socketStatus.registered,
+    hasCredentials: socketStatus.hasCredentials,
+    userId: socketStatus.userId,
     reconnectAttempts,
     autoPairAttempts: getAutoPairAttempts(),
     restartScheduled,
+    socketActive: socketStatus.isActive,
   };
 }
 
@@ -597,6 +848,69 @@ export function setStarted(value: boolean) {
 
 export function getJidNormalizedUser() {
   return jidNormalizedUser;
+}
+
+export function requestQRCode() {
+  if (sock?.authState.creds.registered) {
+    logInfo("QR Code nao solicitado - sessao ja registrada");
+    return false;
+  }
+
+  shouldEmitQR = true;
+  logInfo("QR Code solicitado - sera emitido na proxima geracao");
+
+  return true;
+}
+
+export async function forceQRGeneration(io: SocketIOServer) {
+  if (!sock || sock.authState.creds.registered) {
+    return false;
+  }
+
+  try {
+    shouldEmitQR = true;
+
+    if (connectionState === "open") {
+      logInfo("Forcando nova geracao de QR - reiniciando conexao");
+      cleanupCurrentSocket("force_qr_generation");
+      setTimeout(() => startBaileys(io, false), 500);
+    } else if (!starting) {
+      logInfo("Iniciando conexao para gerar QR Code");
+      setTimeout(() => startBaileys(io, false), 100);
+    }
+
+    return true;
+  } catch (error) {
+    logError("Erro ao forcar geracao de QR", error);
+    return false;
+  }
+}
+
+export async function forceImmediateQR(io: SocketIOServer) {
+  try {
+    shouldEmitQR = true;
+    shouldStopReconnecting = false;
+
+    if (sock?.authState.creds.registered) {
+      io.emit("qr_generation_error", { error: "Sessao ja registrada" });
+      return false;
+    }
+
+    if (sock) {
+      cleanupCurrentSocket("immediate_qr_request");
+    }
+
+    reconnectAttempts = 0;
+    connectionState = undefined;
+
+    await startBaileys(io, true);
+
+    return true;
+  } catch (error) {
+    logError("Erro ao forcar QR Code imediato", error);
+    io.emit("qr_generation_error", { error: "Erro ao gerar QR Code" });
+    return false;
+  }
 }
 
 export { jidNormalizedUser };

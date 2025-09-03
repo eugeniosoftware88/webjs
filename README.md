@@ -1,19 +1,70 @@
 # Medicit WhatsApp API
 
+<div align="center">
+  <img src="public/painel.png" alt="Painel de Administração do Medicit WhatsApp API" />
+</div>
+
 ### 📁 Estrutura dos Arquivos
 
 ```
 src/
-├── server.ts         # Arquivo principal - coordena todos os módulos
-├── config.ts         # Configurações da aplicação
-├── logger.ts         # Sistema de logging centralizado
-├── initWa.ts         # Inicialização e gerenciamento do WhatsApp/Baileys
-├── pairing.ts        # Lógica de pareamento de dispositivos
-├── message.ts        # Manipulação de mensagens (envio/recebimento)
-├── routes.ts         # Rotas da API Express
-├── external.ts       # Integração com endpoints externos
-└── shutdown.ts       # Gerenciamento de desligamento graceful
+├── server.ts           # Arquivo principal - coordena todos os módulos
+├── config.ts           # Configurações da aplicação
+├── logger.ts           # Sistema de logging centralizado
+├── initWa.ts           # Inicialização e gerenciamento do WhatsApp/Baileys
+├── pairing.ts          # Lógica de pareamento de dispositivos
+├── message.ts          # Manipulação de mensagens (envio/recebimento)
+├── routes.ts           # Rotas da API Express
+├── adminRoutes.ts      # Rotas do painel administrativo
+├── external.ts         # Integração com endpoints externos
+├── dynamicConfig.ts    # Gerenciamento de configurações dinâmicas
+└── shutdown.ts         # Gerenciamento de desligamento graceful
 ```
+
+## 🆕 Painel de Administração Web
+
+A API agora inclui um **painel de administração web moderno** que permite gerenciar configurações e pareamento através de uma interface visual intuitiva.
+
+### 🔐 Ativação do Painel
+
+Para ativar o painel administrativo, defina a variável `ADMIN_TOKEN` no arquivo `.env`:
+
+```bash
+ADMIN_TOKEN=seu_token_seguro_aqui
+```
+
+**Comportamentos quando `ADMIN_TOKEN` está definido:**
+
+- ✅ Interface web disponível em `/admin`
+- ✅ Configurações podem ser alteradas dinamicamente
+- ✅ Pareamento controlado via interface
+- ❌ Pareamento automático na inicialização **desabilitado**
+- ❌ Endpoint público `/baileys/pair` **bloqueado**
+
+### 🎯 Funcionalidades do Painel
+
+#### ⚙️ Configurações Dinâmicas
+
+- **Telefone de Pareamento**: Altere o número sem reiniciar a aplicação
+- **Endpoint Externo**: Configure a URL de webhook em tempo real
+- **Persistência**: Configurações salvas sobrescrevem as do `.env`
+
+#### 📱 Controle de Pareamento
+
+- **Código de Pareamento**: Geração manual de códigos de 8 dígitos
+- **QR Code**: Geração de QR Code para escaneamento
+- **Limite de Tentativas**: Máximo 4 códigos por hora (segurança)
+- **Bloqueio Automático**: Após 4 tentativas, apenas QR Code disponível
+
+#### 📊 Monitoramento
+
+- **Status da Conexão**: Visualização em tempo real
+- **Feedback Visual**: Alertas e notificações contextuais
+- **Contadores**: Tentativas restantes e tempo para reset
+
+### 🌐 Interface Web
+
+Acesse o painel através de: `http://localhost:8000/admin`
 
 ## 📋 Descrição dos Módulos
 
@@ -22,9 +73,35 @@ src/
 - **Responsabilidade**: Centraliza todas as configurações da aplicação
 - **Conteúdo**:
   - Variáveis de ambiente (PORT, LOG_LEVEL, etc.)
+  - **ADMIN_TOKEN**: Token para acesso ao painel administrativo
   - Constantes de pareamento (timeouts, tentativas)
   - Constantes de reconexão
   - Configuração de endpoints externos
+
+### 🆕 `dynamicConfig.ts`
+
+- **Responsabilidade**: Gerenciamento de configurações dinâmicas
+- **Funcionalidades**:
+  - `updateConfig()` - Atualiza configurações em tempo real
+  - `getPairPhone()` - Retorna telefone configurado dinamicamente
+  - `getExternalEndpoint()` - Retorna endpoint configurado dinamicamente
+  - `addPairingAttempt()` - Registra tentativas de pareamento
+  - `canRequestPairingCode()` - Verifica se pode gerar código
+  - Sistema de controle de tentativas com janela de tempo
+
+### 🌐 `adminRoutes.ts`
+
+- **Responsabilidade**: Rotas do painel de administração web
+- **Rotas**:
+  - `GET /admin` - Interface web de administração
+  - `POST /admin/auth` - Autenticação com token
+  - `GET /admin/config` - Busca configurações atuais
+  - `POST /admin/config` - Salva novas configurações
+  - `POST /admin/pairing-code` - Gera código de pareamento
+  - `POST /admin/qr-code` - Gera QR Code
+  - `POST /admin/reset` - Reset da sessão
+  - `GET /admin/status` - Status da aplicação
+  - `GET /admin/pairing-info` - Informações de tentativas
 
 ### 📝 `logger.ts`
 
@@ -51,11 +128,14 @@ src/
 
 - **Responsabilidade**: Gerenciamento de pareamento de dispositivos
 - **Funcionalidades**:
-  - `generatePairingCode()` - Gera códigos de pareamento
-  - `attemptAutoPair()` - Tentativas automáticas de pareamento
+  - `generatePairingCode()` - Gera códigos de pareamento (modo público)
+  - `generatePairingCodeAdmin()` - Gera códigos via painel admin
+  - `attemptAutoPair()` - Tentativas automáticas (desabilitado no modo admin)
   - `schedulePairingRefresh()` - Agendamento de refresh
   - `isPairingCodeValid()` - Validação de códigos
   - `getPairingStatus()` - Status do pareamento
+  - `getPairingInfo()` - Informações de tentativas para painel admin
+  - **Controle de tentativas**: Máximo 4 códigos por hora
 
 ### 💬 `message.ts`
 
@@ -84,6 +164,7 @@ src/
   - `trySendExternalMessage()` - Envio de mensagens para endpoint externo
   - `trySendExternalStatus()` - Envio de status para endpoint externo
   - `postExternal()` - Função base para requisições externas
+  - **Configuração Dinâmica**: Usa endpoint configurado no painel admin
 
 ### 🔄 `shutdown.ts`
 
@@ -101,7 +182,9 @@ src/
   - Inicialização do Express e Socket.IO
   - Configuração de CORS
   - Coordenação dos módulos
+  - **Modo Admin**: Detecta `ADMIN_TOKEN` e configura interface web
   - Inicialização do logger e WhatsApp
+  - Configuração condicional de arquivos estáticos
 
 ## 🔄 Fluxo de Funcionamento
 
@@ -118,40 +201,45 @@ src/
    - Carrega dependências do Baileys
    - Configura autenticação
    - Processa eventos (conexão, mensagens, etc.)
+   - **QR Code via Socket**: Emite QR codes para painel admin
    - Gerencia reconexões automáticas
 
 3. **Pareamento** (`pairing.ts`):
 
-   - Gera códigos quando necessário
+   - **Modo Normal**: Gera códigos automaticamente na inicialização
+   - **Modo Admin**: Geração manual via interface web apenas
    - Gerencia cache de códigos
-   - Tentativas automáticas em sessões não registradas
+   - **Controle de Tentativas**: Limita códigos a 4 por hora
+   - Tentativas automáticas (desabilitadas no modo admin)
 
-4. **Mensagens** (`message.ts`):
+4. **Configurações** (`dynamicConfig.ts`):
+
+   - Carrega configurações salvas no arquivo `dynamic-config.json`
+   - Permite alteração em tempo real via painel
+   - Sobrescreve configurações do `.env`
+   - Persiste mudanças no disco
+
+5. **Mensagens** (`message.ts`):
 
    - Intercepta envios para logging
    - Formata números e JIDs
-   - Integra com sistema externo
+   - **Integração Dinâmica**: Usa endpoint configurado dinamicamente
 
-5. **Logging** (`logger.ts`):
+6. **Logging** (`logger.ts`):
    - Centraliza todos os logs
    - Gerencia logs pendentes
    - Formatação consistente
 
-## ✅ Benefícios da Refatoração
-
-- **Manutenibilidade**: Código organizado em responsabilidades específicas
-- **Testabilidade**: Módulos independentes facilitam testes unitários
-- **Reutilização**: Funções podem ser importadas onde necessário
-- **Debugging**: Problemas localizados mais facilmente
-- **Escalabilidade**: Novos recursos podem ser adicionados em módulos específicos
-- **Logs Mantidos**: Todos os logs originais foram preservados
-- **Funcionalidades Preservadas**: 100% das funcionalidades originais mantidas
-
 ## 🔧 Como Usar
 
+### Modo Normal (sem painel admin)
+
 ```bash
-# Instalação de Dependencias
+# Instalação de Dependências
 npm install
+
+# Configurar .env (sem ADMIN_TOKEN)
+cp .env.example .env
 
 # Desenvolvimento
 npm run dev
@@ -162,3 +250,49 @@ npm run build
 # Produção
 npm start
 ```
+
+### Modo Administrativo (com painel web)
+
+```bash
+# Instalação de Dependências
+npm install
+
+# Configurar .env com ADMIN_TOKEN
+cp .env.example .env
+echo "ADMIN_TOKEN=seu_token_super_seguro" >> .env
+
+# Desenvolvimento
+npm run dev
+
+# Acessar painel em http://localhost:8000/admin
+```
+
+### 🔑 Configuração do Token Admin
+
+1. **Defina o token no `.env`**:
+
+   ```bash
+   ADMIN_TOKEN=meu_token_super_seguro_123
+   ```
+
+2. **Acesse o painel**: `http://localhost:8000/admin`
+
+3. **Faça login** com o token configurado
+
+4. **Configure**:
+
+   - 📞 **Telefone**: Número para pareamento (apenas números)
+   - 🌐 **Endpoint**: URL para receber webhooks
+   - 💾 **Salvar**: Configurações persistem entre reinicializações
+
+5. **Pareamento**:
+   - � **Gerar Código**: Código de 6 dígitos para WhatsApp
+   - 📷 **Gerar QR**: QR Code para escaneamento
+   - 🔄 **Reset**: Limpa sessão atual
+
+### ⚠️ Limitações de Segurança
+
+- **Códigos de Pareamento**: Máximo 4 por hora
+- **Bloqueio Automático**: Após limite, apenas QR Code disponível
+- **Reset Automático**: Contador zerado após 1 hora
+- **Autenticação**: Token obrigatório para todas as operações admin

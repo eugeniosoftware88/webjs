@@ -8,7 +8,8 @@ import {
 } from "./initWa";
 import { generatePairingCode, getPairingStatus } from "./pairing";
 import { formatNumberToJid } from "./message";
-import { PAIR_PHONE } from "./config";
+import { PAIR_PHONE, ADMIN_TOKEN } from "./config";
+import { dynamicConfig } from "./dynamicConfig";
 import { Server as SocketIOServer } from "socket.io";
 
 export function setupRoutes(app: express.Application, io: SocketIOServer) {
@@ -73,8 +74,17 @@ export function setupRoutes(app: express.Application, io: SocketIOServer) {
   });
 
   app.get("/baileys/pair", async (req: Request, res: Response) => {
+    if (ADMIN_TOKEN) {
+      return res.status(403).json({
+        ok: false,
+        error: "Pareamento disponivel apenas no painel administrativo",
+        redirectTo: "/admin",
+      });
+    }
+
     const force = /^(1|true|yes)$/i.test((req.query.force as string) || "");
-    let phone = (req.query.phone as string) || PAIR_PHONE;
+    let phone =
+      (req.query.phone as string) || dynamicConfig.getPairPhone() || PAIR_PHONE;
 
     const sock = getSocket();
     const result = await generatePairingCode(sock!, phone, force, io);

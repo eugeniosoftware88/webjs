@@ -9,6 +9,9 @@ export const APP_CONFIG = {
   EXTERNAL_ENDPOINT:
     process.env.EXTERNAL_ENDPOINT ||
     "https://app.medicit.com.br/medicit_agenda/confirm",
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN || undefined,
+  APP_URL:
+    process.env.APP_URL || `http://localhost:${process.env.PORT || "8000"}`,
 } as const;
 
 export const {
@@ -20,6 +23,8 @@ export const {
   LOG_WA_MESSAGES,
   LOG_CONN_VERBOSE,
   EXTERNAL_ENDPOINT,
+  ADMIN_TOKEN,
+  APP_URL,
 } = APP_CONFIG;
 
 export const MSG_LOG_ENABLED = (() => {
@@ -36,5 +41,5 @@ export const PAIRING_MIN_REUSE_REMAINING_MS = 12_000;
 export const MAX_AUTO_PAIR_ATTEMPTS = 6;
 export const AUTO_PAIR_COOLDOWN_MS = 12_000;
 
-// reconexão
+// reconexao
 export const MAX_RECONNECT_DELAY = 60000;

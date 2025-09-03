@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Medicit WhatsApp API - Painel de Controle</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --primary-color: #25d366;
+        --primary-dark: #1da851;
+        --secondary-color: #34495e;
+        --background-color: #f8f9fa;
+        --card-background: #ffffff;
+        --text-color: #2c3e50;
+        --text-muted: #6c757d;
+        --border-color: #dee2e6;
+        --success-color: #28a745;
+        --warning-color: #ffc107;
+        --danger-color: #dc3545;
+        --info-color: #17a2b8;
+        --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        background: linear-gradient(
+          135deg,
+          var(--background-color) 0%,
+          #e9ecef 100%
+        );
+        color: var(--text-color);
+        line-height: 1.6;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+
+      .header h1 {
+        color: var(--primary-color);
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+      }
+
+      .header p {
+        color: var(--text-muted);
+        font-size: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 2rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0 auto 2rem;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .status-badge.status-connected {
+        background: linear-gradient(135deg, #d4edda, #c3e6cb);
+        color: #155724;
+        border: 2px solid #28a745;
+      }
+
+      .status-badge.status-disconnected {
+        background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+        color: #721c24;
+        border: 2px solid #dc3545;
+      }
+
+      .status-badge.status-connecting {
+        background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+        color: #856404;
+        border: 2px solid #ffc107;
+      }
+
+      .status-info {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 400;
+        opacity: 0.8;
+      }
+
+      .card {
+        background: var(--card-background);
+        border-radius: 0.75rem;
+        box-shadow: var(--shadow-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid var(--border-color);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        height: 400px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.1);
+      }
+
+      .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--text-color);
+      }
+
+      input[type="text"],
+      input[type="password"],
+      input[type="url"] {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        background: #ffffff;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(37, 211, 102, 0.25);
+      }
+
+      .btn {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        justify-content: center;
+        min-width: 100px;
+      }
+
+      .btn-compact {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+        min-width: 90px;
+        gap: 0.3rem;
+      }
+
+      .btn-primary {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+      }
+
+      .btn-secondary {
+        background: var(--secondary-color);
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background: #2c3e50;
+        transform: translateY(-1px);
+      }
+
+      .btn-warning {
+        background: var(--warning-color);
+        color: #212529;
+      }
+
+      .btn-warning:hover {
+        background: #e0a800;
+        transform: translateY(-1px);
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+      }
+
+      .alert {
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid transparent;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+      }
+
+      .alert-success {
+        color: #155724;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+      }
+
+      .alert-error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+      }
+
+      .alert-warning {
+        color: #856404;
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+      }
+
+      .alert-info {
+        color: #0c5460;
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+      }
+
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 2rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .status-connected {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status-disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .status-connecting {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .code-display {
+        background: #f8f9fa;
+        border: 2px dashed var(--border-color);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+        margin: 1rem 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 230px;
+        max-height: 230px;
+        overflow: hidden;
+      }
+
+      .code-display.has-code {
+        border-color: var(--primary-color);
+        background: rgba(37, 211, 102, 0.05);
+      }
+
+      .pairing-code {
+        font-size: 2.2rem;
+        font-weight: bold;
+        font-family: "Courier New", monospace;
+        color: var(--primary-color);
+        letter-spacing: 0.3rem;
+        margin: 0.5rem 0;
+        word-spacing: 0.5rem;
+      }
+
+      .qr-code {
+        max-width: 170px;
+        max-height: 170px;
+        margin: 0.5rem auto;
+        display: block;
+        object-fit: contain;
+      }
+
+      .pairing-card-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .pairing-controls {
+        margin-top: auto;
+        padding-top: 1rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        align-items: start;
+      }
+
+      .grid-full {
+        grid-column: 1 / -1;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid transparent;
+        border-top: 2px solid currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .text-muted {
+        color: var(--text-muted);
+      }
+
+      .attempts-counter {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-top: 0.5rem;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 0.5rem;
+        background: var(--border-color);
+        border-radius: 0.25rem;
+        overflow: hidden;
+        margin: 1rem 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--primary-color);
+        transition: width 0.3s ease;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 1rem 0.5rem;
+        }
+
+        .header h1 {
+          font-size: 1.75rem;
+        }
+
+        .card {
+          padding: 1rem;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+        }
+
+        .status-badge {
+          padding: 0.6rem 1.2rem;
+          font-size: 0.85rem;
+        }
+
+        .btn-compact {
+          padding: 0.35rem 0.7rem;
+          font-size: 0.75rem;
+          min-width: 80px;
+        }
+
+        .toast-container {
+          top: 10px;
+          right: 10px;
+          left: 10px;
+          max-width: none;
+        }
+
+        .toast {
+          margin-bottom: 0.25rem;
+        }
+
+        .card-title-with-info {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+
+        .attempts-info-inline {
+          align-self: stretch;
+          text-align: center;
+        }
+      }
+      .login-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .login-card {
+        background: var(--card-background);
+        padding: 3rem;
+        border-radius: 1rem;
+        box-shadow: var(--shadow-lg);
+        max-width: 400px;
+        width: 90%;
+      }
+
+      .login-title {
+        text-align: center;
+        margin-bottom: 2rem;
+        color: var(--primary-color);
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+
+      /* Modal Styles */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+
+      .modal-overlay.show {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .modal {
+        background: var(--card-background);
+        border-radius: 1rem;
+        box-shadow: var(--shadow-lg);
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        transform: scale(0.8) translateY(-20px);
+        transition: transform 0.3s ease;
+      }
+
+      .modal-overlay.show .modal {
+        transform: scale(1) translateY(0);
+      }
+
+      .modal-header {
+        padding: 2rem 2rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .modal-title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .modal-body {
+        padding: 2rem;
+      }
+
+      .modal-footer {
+        padding: 1rem 2rem 2rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .btn-danger {
+        background: var(--danger-color);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #c82333;
+        transform: translateY(-1px);
+      }
+
+      .btn-outline {
+        background: transparent;
+        color: var(--text-color);
+        border: 2px solid var(--border-color);
+      }
+
+      .btn-outline:hover {
+        background: var(--background-color);
+        border-color: var(--text-color);
+        transform: translateY(-1px);
+      }
+
+      /* Toast Notifications */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 3000;
+        max-width: 400px;
+      }
+
+      .toast {
+        margin-bottom: 0.5rem;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-lg);
+        font-size: 0.9rem;
+        font-weight: 500;
+        transform: translateX(400px);
+        opacity: 0;
+        transition: all 0.3s ease;
+        border-left: 4px solid;
+        background: white;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      .toast.toast-success {
+        border-left-color: var(--success-color);
+        color: #155724;
+      }
+
+      .toast.toast-error {
+        border-left-color: var(--danger-color);
+        color: #721c24;
+      }
+
+      .toast.toast-warning {
+        border-left-color: var(--warning-color);
+        color: #856404;
+      }
+
+      .toast.toast-info {
+        border-left-color: var(--info-color);
+        color: #0c5460;
+      }
+
+      .toast-close {
+        position: absolute;
+        top: 50%;
+        right: 0.75rem;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        opacity: 0.6;
+        padding: 0;
+        line-height: 1;
+      }
+
+      .toast-close:hover {
+        opacity: 1;
+      }
+
+      /* Card Title with Attempts Info */
+      .card-title-with-info {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .attempts-info-inline {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-weight: 400;
+        background: var(--background-color);
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        border: 1px solid var(--border-color);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay">
+      <div class="login-card">
+        <h2 class="login-title">🔐 Acesso Administrativo</h2>
+        <div id="loginAlert"></div>
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="adminToken">Token de Administração:</label>
+            <input
+              type="password"
+              id="adminToken"
+              name="adminToken"
+              required
+              placeholder="Digite o token de administração"
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%">
+            <span id="loginLoading" class="loading hidden"></span>
+            <span id="loginText">Entrar</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Reset Confirmation Modal -->
+    <div id="resetModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">⚠️ Confirmar Reset da Sessão</h3>
+        </div>
+        <div class="modal-body">
+          <p><strong>Atenção:</strong> Esta ação irá:</p>
+          <ul style="margin: 1rem 0; padding-left: 1.5rem">
+            <li>Desconectar o WhatsApp Web do seu dispositivo</li>
+            <li>Remover a sessão ativa do WhatsApp no celular</li>
+            <li>Apagar todos os dados de autenticação salvos</li>
+            <li>Require um novo pareamento para reconectar</li>
+          </ul>
+          <p style="color: var(--danger-color); font-weight: 500">
+            ⚠️ Você precisará escanear o QR Code ou inserir o código de
+            pareamento novamente.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button id="cancelResetBtn" class="btn btn-outline">Cancelar</button>
+          <button id="confirmResetBtn" class="btn btn-danger">
+            <span id="modalResetLoading" class="loading hidden"></span>
+            <span id="modalResetText">🔄 Confirmar Reset</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" class="hidden">
+      <div class="container">
+        <div class="header">
+          <h1>📱 Medicit WhatsApp API</h1>
+          <p>Painel de Controle e Configurações</p>
+
+          <!-- Status Badge -->
+          <div id="connectionStatus" class="status-badge status-disconnected">
+            <span>🔴</span> Desconectado
+            <span id="sessionInfo" class="status-info"></span>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- Configuration Card -->
+          <div class="card">
+            <h2 class="card-title">⚙️ Configurações</h2>
+            <form id="configForm">
+              <div class="form-group">
+                <label for="pairPhone">📞 Telefone para Pareamento:</label>
+                <input
+                  type="text"
+                  id="pairPhone"
+                  name="pairPhone"
+                  placeholder="Ex: 5511999999999"
+                  pattern="[0-9]+"
+                  title="Apenas números"
+                />
+                <small class="text-muted"
+                  >Apenas números, incluindo código do país e DDD</small
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="externalEndpoint">🌐 Endpoint Externo:</label>
+                <input
+                  type="url"
+                  id="externalEndpoint"
+                  name="externalEndpoint"
+                  placeholder="https://exemplo.com/webhook"
+                />
+                <small class="text-muted"
+                  >URL para receber notificações de mensagens</small
+                >
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-compact">
+                <span id="configLoading" class="loading hidden"></span>
+                <span id="configText">💾 Salvar</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Pairing Card -->
+          <div class="card">
+            <div class="card-title-with-info">
+              <h2 class="card-title">🔗 Pareamento WhatsApp</h2>
+              <div
+                id="attemptsInfoInline"
+                class="attempts-info-inline hidden"
+              ></div>
+            </div>
+
+            <div class="pairing-card-content">
+              <div class="code-display" id="codeDisplay">
+                <div id="noPairing">
+                  <p class="text-muted">Nenhum código de pareamento ativo</p>
+                  <p class="text-muted">
+                    Clique em "Gerar Código" para iniciar o pareamento
+                  </p>
+                </div>
+
+                <div id="pairingCode" class="hidden">
+                  <p>Digite este código no WhatsApp:</p>
+                  <div class="pairing-code" id="codeValue"></div>
+                  <div id="codeTimer" class="text-muted"></div>
+                </div>
+
+                <div id="qrCodeContainer" class="hidden">
+                  <p>Escaneie o QR Code com o WhatsApp:</p>
+                  <img id="qrCodeImage" class="qr-code" alt="QR Code" />
+                </div>
+              </div>
+
+              <div id="pairingControls" class="pairing-controls">
+                <div
+                  style="
+                    display: flex;
+                    gap: 0.8rem;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                  "
+                >
+                  <button
+                    id="generateCodeBtn"
+                    class="btn btn-primary btn-compact"
+                  >
+                    <span id="codeLoading" class="loading hidden"></span>
+                    <span id="codeButtonText">📱 Código</span>
+                  </button>
+
+                  <button
+                    id="generateQRBtn"
+                    class="btn btn-secondary btn-compact"
+                  >
+                    <span id="qrLoading" class="loading hidden"></span>
+                    <span id="qrButtonText">📷 QR Code</span>
+                  </button>
+
+                  <button
+                    id="resetSessionBtn"
+                    class="btn btn-warning btn-compact"
+                  >
+                    <span id="resetLoading" class="loading hidden"></span>
+                    <span id="resetButtonText">🔄 Reset</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      class MedicitAdmin {
+        constructor() {
+          this.socket = null;
+          this.isAuthenticated = false;
+          this.currentConfig = {};
+          this.pairingInterval = null;
+          this.isInitialLoad = true;
+          this.pendingStatus = null;
+          this.init();
+        }
+
+        init() {
+          this.bindEvents();
+          this.checkAuth();
+        }
+
+        bindEvents() {
+          document
+            .getElementById("loginForm")
+            .addEventListener("submit", (e) => {
+              e.preventDefault();
+              this.handleLogin();
+            });
+
+          document
+            .getElementById("configForm")
+            .addEventListener("submit", (e) => {
+              e.preventDefault();
+              this.handleConfigSubmit();
+            });
+
+          document
+            .getElementById("generateCodeBtn")
+            .addEventListener("click", () => {
+              this.generatePairingCode();
+            });
+
+          document
+            .getElementById("generateQRBtn")
+            .addEventListener("click", () => {
+              this.generateQRCode();
+            });
+
+          document
+            .getElementById("resetSessionBtn")
+            .addEventListener("click", () => {
+              this.showResetModal();
+            });
+
+          document
+            .getElementById("cancelResetBtn")
+            .addEventListener("click", () => {
+              this.hideResetModal();
+            });
+
+          document
+            .getElementById("confirmResetBtn")
+            .addEventListener("click", () => {
+              this.resetSession();
+            });
+
+          document
+            .getElementById("resetModal")
+            .addEventListener("click", (e) => {
+              if (e.target.id === "resetModal") {
+                this.hideResetModal();
+              }
+            });
+        }
+
+        async checkAuth() {
+          const token = localStorage.getItem("adminToken");
+          if (token) {
+            await this.authenticate(token);
+          }
+        }
+
+        async handleLogin() {
+          const token = document.getElementById("adminToken").value;
+          this.setLoginLoading(true);
+          await this.authenticate(token);
+          this.setLoginLoading(false);
+        }
+
+        async authenticate(token) {
+          try {
+            const response = await fetch("/admin/auth", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token }),
+            });
+
+            const result = await response.json();
+
+            if (result.ok) {
+              localStorage.setItem("adminToken", token);
+              this.isAuthenticated = true;
+              this.hideLogin();
+              this.initSocket();
+              this.loadConfig();
+              setTimeout(() => {
+                this.loadStatus();
+              }, 100);
+            } else {
+              this.showLoginAlert("❌ Token inválido", "error");
+              localStorage.removeItem("adminToken");
+            }
+          } catch (error) {
+            this.showLoginAlert("❌ Erro de conexão", "error");
+          }
+        }
+
+        initSocket() {
+          this.socket = io();
+
+          this.socket.on("connect", () => {
+            console.log("Socket conectado");
+          });
+
+          this.socket.on("pairing_code", (code) => {
+            this.displayPairingCode(code);
+          });
+
+          this.socket.on("qr_code", (qrData) => {
+            this.displayQRCode(qrData);
+            this.setQRLoading(false);
+            this.clearQRWaitingState();
+          });
+
+          this.socket.on("qr_generation_error", (data) => {
+            this.showAlert(`❌ ${data.error}`, "error");
+            this.setQRLoading(false);
+            this.clearQRWaitingState();
+          });
+
+          this.socket.on("connection_update", (status) => {
+            this.updateConnectionStatus(status);
+          });
+        }
+
+        hideLogin() {
+          document.getElementById("loginOverlay").classList.add("hidden");
+          document.getElementById("mainContent").classList.remove("hidden");
+
+          if (this.pendingStatus) {
+            this.updateConnectionStatus(this.pendingStatus);
+            this.pendingStatus = null;
+          }
+        }
+
+        setLoginLoading(loading) {
+          const loadingEl = document.getElementById("loginLoading");
+          const textEl = document.getElementById("loginText");
+          const btn = document.querySelector("#loginForm button");
+
+          if (loading) {
+            loadingEl.classList.remove("hidden");
+            textEl.textContent = "Verificando...";
+            btn.disabled = true;
+          } else {
+            loadingEl.classList.add("hidden");
+            textEl.textContent = "Entrar";
+            btn.disabled = false;
+          }
+        }
+
+        showAlert(message, type, container = "toastContainer") {
+          if (container === "loginAlert") {
+            const alertContainer = document.getElementById(container);
+            const alertEl = document.createElement("div");
+            alertEl.className = `alert alert-${type}`;
+            alertEl.textContent = message;
+            alertContainer.appendChild(alertEl);
+
+            setTimeout(() => {
+              alertEl.remove();
+            }, 5000);
+            return;
+          }
+
+          const toastContainer = document.getElementById("toastContainer");
+          const toastEl = document.createElement("div");
+          toastEl.className = `toast toast-${type}`;
+          toastEl.innerHTML = `
+            ${message}
+            <button class="toast-close" type="button">&times;</button>
+          `;
+
+          toastEl
+            .querySelector(".toast-close")
+            .addEventListener("click", () => {
+              this.removeToast(toastEl);
+            });
+
+          toastContainer.appendChild(toastEl);
+
+          setTimeout(() => {
+            toastEl.classList.add("show");
+          }, 100);
+
+          setTimeout(() => {
+            this.removeToast(toastEl);
+          }, 5000);
+        }
+
+        removeToast(toastEl) {
+          toastEl.classList.remove("show");
+          setTimeout(() => {
+            if (toastEl.parentNode) {
+              toastEl.parentNode.removeChild(toastEl);
+            }
+          }, 300);
+        }
+
+        showLoginAlert(message, type) {
+          this.showAlert(message, type, "loginAlert");
+        }
+
+        async loadConfig() {
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/config", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              this.currentConfig = result.config;
+              this.updateConfigForm();
+            }
+          } catch (error) {
+            this.showAlert("❌ Erro ao carregar configurações", "error");
+          }
+        }
+
+        updateConfigForm() {
+          document.getElementById("pairPhone").value =
+            this.currentConfig.PAIR_PHONE || "";
+          document.getElementById("externalEndpoint").value =
+            this.currentConfig.EXTERNAL_ENDPOINT || "";
+        }
+
+        async handleConfigSubmit() {
+          const formData = new FormData(document.getElementById("configForm"));
+          const config = {
+            PAIR_PHONE: formData.get("pairPhone"),
+            EXTERNAL_ENDPOINT: formData.get("externalEndpoint"),
+          };
+
+          this.setConfigLoading(true);
+
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/config", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(config),
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              this.currentConfig = { ...this.currentConfig, ...config };
+              this.showAlert("✅ Configurações salvas com sucesso!", "success");
+            } else {
+              this.showAlert(`❌ ${result.error}`, "error");
+            }
+          } catch (error) {
+            this.showAlert("❌ Erro ao salvar configurações", "error");
+          } finally {
+            this.setConfigLoading(false);
+          }
+        }
+
+        setConfigLoading(loading) {
+          const loadingEl = document.getElementById("configLoading");
+          const textEl = document.getElementById("configText");
+          const btn = document.querySelector("#configForm button");
+
+          if (loading) {
+            loadingEl.classList.remove("hidden");
+            textEl.textContent = "Salvando...";
+            btn.disabled = true;
+          } else {
+            loadingEl.classList.add("hidden");
+            textEl.textContent = "💾 Salvar Configurações";
+            btn.disabled = false;
+          }
+        }
+
+        async generatePairingCode() {
+          const generateCodeBtn = document.getElementById("generateCodeBtn");
+          if (
+            generateCodeBtn.disabled &&
+            generateCodeBtn
+              .querySelector("span:last-child")
+              .textContent.includes("Conectado")
+          ) {
+            this.showAlert(
+              "ℹ️ Sessão já está conectada. Use 'Reset Sessão' para gerar novo código.",
+              "info"
+            );
+            return;
+          }
+
+          if (!this.currentConfig.PAIR_PHONE) {
+            this.showAlert("❌ Configure o telefone primeiro", "warning");
+            return;
+          }
+
+          this.setCodeLoading(true);
+
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/pairing-code", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ phone: this.currentConfig.PAIR_PHONE }),
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              this.updateAttemptsInfo();
+            } else {
+              this.showAlert(`❌ ${result.error}`, "error");
+            }
+          } catch (error) {
+            this.showAlert("❌ Erro ao gerar código", "error");
+          } finally {
+            this.setCodeLoading(false);
+          }
+        }
+
+        async generateQRCode() {
+          const generateQRBtn = document.getElementById("generateQRBtn");
+          if (
+            generateQRBtn.disabled &&
+            generateQRBtn
+              .querySelector("span:last-child")
+              .textContent.includes("Conectado")
+          ) {
+            this.showAlert(
+              "ℹ️ Sessão já está conectada. Use 'Reset Sessão' para gerar novo QR.",
+              "info"
+            );
+            return;
+          }
+
+          this.setQRLoading(true);
+
+          this.showQRWaitingState();
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/qr-code", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              this.showAlert("📷 " + result.message, "info");
+            } else {
+              this.showAlert(`❌ ${result.error}`, "error");
+              this.setQRLoading(false);
+              this.clearQRWaitingState();
+            }
+          } catch (error) {
+            this.showAlert("❌ Erro ao gerar QR Code", "error");
+            this.setQRLoading(false);
+            this.clearQRWaitingState();
+          }
+        }
+
+        async resetSession() {
+          this.setModalResetLoading(true);
+
+          try {
+            if (this.socket) {
+              this.socket.emit("force_logout");
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/reset", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              this.showAlert("✅ Sessão resetada com sucesso!", "success");
+              this.clearPairingDisplay();
+              this.hideResetModal();
+
+              setTimeout(() => {
+                this.loadStatus();
+              }, 2000);
+            } else {
+              this.showAlert(`❌ ${result.error}`, "error");
+            }
+          } catch (error) {
+            this.showAlert("❌ Erro ao resetar sessão", "error");
+          } finally {
+            this.setModalResetLoading(false);
+          }
+        }
+        showResetModal() {
+          const modal = document.getElementById("resetModal");
+          modal.classList.add("show");
+          document.body.style.overflow = "hidden";
+        }
+
+        hideResetModal() {
+          const modal = document.getElementById("resetModal");
+          modal.classList.remove("show");
+          document.body.style.overflow = "";
+        }
+
+        setModalResetLoading(loading) {
+          const loadingEl = document.getElementById("modalResetLoading");
+          const textEl = document.getElementById("modalResetText");
+          const btn = document.getElementById("confirmResetBtn");
+
+          if (loading) {
+            loadingEl.classList.remove("hidden");
+            textEl.textContent = "Resetando...";
+            btn.disabled = true;
+          } else {
+            loadingEl.classList.add("hidden");
+            textEl.textContent = "🔄 Confirmar Reset";
+            btn.disabled = false;
+          }
+        }
+
+        displayPairingCode(code) {
+          document.getElementById("noPairing").classList.add("hidden");
+          document.getElementById("qrCodeContainer").classList.add("hidden");
+          document.getElementById("pairingCode").classList.remove("hidden");
+
+          const formattedCode =
+            code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+
+          document.getElementById("codeValue").textContent = formattedCode;
+          document.getElementById("codeDisplay").classList.add("has-code");
+
+          this.startPairingCountdown();
+          this.showAlert(
+            "📱 Código de pareamento gerado! Digite no WhatsApp.",
+            "info"
+          );
+        }
+
+        displayQRCode(qrData) {
+          const codeDisplay = document.getElementById("codeDisplay");
+          codeDisplay.innerHTML = `
+            <div id="noPairing" class="hidden">
+              <p class="text-muted">Nenhum código de pareamento ativo</p>
+              <p class="text-muted">Clique em "Gerar Código" para iniciar o pareamento</p>
+            </div>
+            <div id="pairingCode" class="hidden">
+              <p>Digite este código no WhatsApp:</p>
+              <div class="pairing-code" id="codeValue"></div>
+              <div id="codeTimer" class="text-muted"></div>
+            </div>
+            <div id="qrCodeContainer" class="hidden">
+              <p>Escaneie o QR Code com o WhatsApp:</p>
+              <img id="qrCodeImage" class="qr-code" alt="QR Code" />
+            </div>
+          `;
+
+          document.getElementById("noPairing").classList.add("hidden");
+          document.getElementById("pairingCode").classList.add("hidden");
+          document.getElementById("qrCodeContainer").classList.remove("hidden");
+          document.getElementById("qrCodeImage").src = qrData;
+          document.getElementById("codeDisplay").classList.add("has-code");
+
+          this.showAlert("📷 QR Code gerado! Escaneie com o WhatsApp.", "info");
+        }
+
+        startPairingCountdown() {
+          if (this.pairingInterval) {
+            clearInterval(this.pairingInterval);
+          }
+
+          let timeLeft = 180;
+          const timerEl = document.getElementById("codeTimer");
+
+          this.pairingInterval = setInterval(() => {
+            timeLeft--;
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerEl.textContent = `⏰ Expira em: ${minutes}:${seconds
+              .toString()
+              .padStart(2, "0")}`;
+
+            if (timeLeft <= 0) {
+              clearInterval(this.pairingInterval);
+              this.clearPairingDisplay();
+              this.showAlert(
+                "⏰ Código expirado. Gere um novo código.",
+                "warning"
+              );
+            }
+          }, 1000);
+        }
+
+        clearPairingDisplay() {
+          if (this.pairingInterval) {
+            clearInterval(this.pairingInterval);
+          }
+
+          const pairingCode = document.getElementById("pairingCode");
+          const qrCodeContainer = document.getElementById("qrCodeContainer");
+          const noPairing = document.getElementById("noPairing");
+          const codeDisplay = document.getElementById("codeDisplay");
+
+          if (pairingCode) {
+            pairingCode.classList.add("hidden");
+          }
+          if (qrCodeContainer) {
+            qrCodeContainer.classList.add("hidden");
+          }
+          if (noPairing) {
+            noPairing.classList.remove("hidden");
+          }
+          if (codeDisplay) {
+            codeDisplay.classList.remove("has-code");
+          }
+        }
+
+        async loadStatus() {
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/status", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              await this.updateAttemptsInfo();
+              this.updateConnectionStatus(result.status);
+              this.isInitialLoad = false;
+            }
+          } catch (error) {
+            console.error("Erro ao carregar status:", error);
+          }
+        }
+
+        updateConnectionStatus(status) {
+          const mainContent = document.getElementById("mainContent");
+          const isMainContentVisible =
+            mainContent && !mainContent.classList.contains("hidden");
+
+          if (!isMainContentVisible) {
+            this.pendingStatus = status;
+            return;
+          }
+
+          const tryUpdate = (attempt = 1) => {
+            const statusEl = document.getElementById("connectionStatus");
+            const infoEl = document.getElementById("sessionInfo");
+
+            if (!statusEl || !infoEl) {
+              if (attempt <= 10) {
+                setTimeout(() => tryUpdate(attempt + 1), 100);
+                return;
+              } else {
+                console.error(
+                  `Elementos não encontrados após 10 tentativas. connectionStatus=${!!statusEl}, sessionInfo=${!!infoEl}`
+                );
+                return;
+              }
+            }
+
+            const wasConnected =
+              statusEl.classList.contains("status-connected");
+            const isConnected =
+              status.connected === true ||
+              (status.connection === "open" && status.socketActive);
+
+            const isFullyConnected = isConnected && status.registered;
+
+            const isExplicitlyDisconnected =
+              status.connected === false &&
+              status.connecting === false &&
+              status.registered === false &&
+              status.connection !== "open" &&
+              status.connection !== "connecting";
+
+            if (isFullyConnected) {
+              statusEl.className = "status-badge status-connected";
+              statusEl.innerHTML =
+                '<span>🟢</span> Conectado<span id="sessionInfo" class="status-info"></span>';
+              const infoEl = document.getElementById("sessionInfo");
+
+              this.clearPairingDisplay();
+              this.updatePairingButtons(true, false);
+            } else if (isConnected && !status.registered) {
+              statusEl.className = "status-badge status-connected";
+              statusEl.innerHTML =
+                '<span>🟢</span> Conectado<span id="sessionInfo" class="status-info"></span>';
+              const infoEl = document.getElementById("sessionInfo");
+
+              this.clearPairingDisplay();
+              this.updatePairingButtons(true, false);
+            } else if (isExplicitlyDisconnected) {
+              statusEl.className = "status-badge status-disconnected";
+              statusEl.innerHTML =
+                '<span>🔴</span> Desconectado<span id="sessionInfo" class="status-info"></span>';
+              const infoEl = document.getElementById("sessionInfo");
+              infoEl.textContent = "Aguardando pareamento";
+
+              this.updatePairingButtons(false, false);
+              this.forceEnablePairingButtons();
+
+              this.clearPairingDisplay();
+
+              if (wasConnected) {
+                this.showAlert(
+                  "📱 Sessão desconectada. Gere um novo código para reconectar.",
+                  "warning"
+                );
+              }
+            } else if (
+              status.connecting ||
+              status.connection === "connecting"
+            ) {
+              statusEl.className = "status-badge status-connecting";
+              statusEl.innerHTML =
+                '<span>🟡</span> Conectando...<span id="sessionInfo" class="status-info"></span>';
+              const infoEl = document.getElementById("sessionInfo");
+              infoEl.textContent = "Estabelecendo conexão";
+              this.updatePairingButtons(false, true);
+            } else {
+              statusEl.className = "status-badge status-disconnected";
+              statusEl.innerHTML =
+                '<span>🔴</span> Desconectado<span id="sessionInfo" class="status-info"></span>';
+              const infoEl = document.getElementById("sessionInfo");
+
+              if (status.registered && !status.connected) {
+                infoEl.textContent = "Registrada mas offline";
+              } else {
+                infoEl.textContent = "Aguardando pareamento";
+              }
+
+              this.updatePairingButtons(false, false);
+
+              this.forceEnablePairingButtons();
+            }
+          };
+
+          tryUpdate();
+        }
+        async updateAttemptsInfo() {
+          try {
+            const token = localStorage.getItem("adminToken");
+            const response = await fetch("/admin/pairing-info", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+              const info = result.info;
+              const attemptsEl = document.getElementById("attemptsInfoInline");
+              const generateBtn = document.getElementById("generateCodeBtn");
+
+              const statusEl = document.getElementById("connectionStatus");
+              const isConnected =
+                statusEl.classList.contains("status-connected");
+
+              if (isConnected) {
+                attemptsEl.textContent = `✅ Conectado (${info.attempts} tentativas)`;
+                attemptsEl.classList.remove("hidden");
+                return;
+              }
+
+              if (info.remainingAttempts <= 0) {
+                attemptsEl.innerHTML = `⚠️ Limite atingido - Reset em: ${this.formatTime(
+                  info.timeUntilReset
+                )}`;
+                attemptsEl.classList.remove("hidden");
+                generateBtn.disabled = true;
+                generateBtn.querySelector("span:last-child").textContent =
+                  "🔒 Bloqueado";
+              } else {
+                attemptsEl.textContent = `📊 ${info.remainingAttempts}/4 tentativas`;
+                attemptsEl.classList.remove("hidden");
+                generateBtn.disabled = false;
+                generateBtn.querySelector("span:last-child").textContent =
+                  "📱 Código";
+              }
+            }
+          } catch (error) {
+            console.error("Erro ao atualizar info de tentativas:", error);
+          }
+        }
+
+        formatTime(ms) {
+          const minutes = Math.floor(ms / (1000 * 60));
+          const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+          return `${minutes}m ${seconds}s`;
+        }
+
+        setCodeLoading(loading) {
+          this.setButtonLoading(
+            "codeLoading",
+            "codeButtonText",
+            loading,
+            "📱 Código",
+            "Gerando..."
+          );
+        }
+
+        setQRLoading(loading) {
+          this.setButtonLoading(
+            "qrLoading",
+            "qrButtonText",
+            loading,
+            "📷 QR Code",
+            "Gerando..."
+          );
+        }
+
+        setResetLoading(loading) {
+          this.setButtonLoading(
+            "resetLoading",
+            "resetButtonText",
+            loading,
+            "🔄 Reset",
+            "Resetando..."
+          );
+        }
+
+        setButtonLoading(loadingId, textId, loading, normalText, loadingText) {
+          const loadingEl = document.getElementById(loadingId);
+          const textEl = document.getElementById(textId);
+          const btn = loadingEl.closest("button");
+
+          if (loading) {
+            loadingEl.classList.remove("hidden");
+            textEl.textContent = loadingText;
+            btn.disabled = true;
+          } else {
+            loadingEl.classList.add("hidden");
+            textEl.textContent = normalText;
+            btn.disabled = false;
+          }
+        }
+
+        showQRWaitingState() {
+          const codeDisplay = document.getElementById("codeDisplay");
+          const noPairing = document.getElementById("noPairing");
+          const pairingCode = document.getElementById("pairingCode");
+          const qrContainer = document.getElementById("qrCodeContainer");
+
+          if (!codeDisplay) return;
+
+          if (noPairing) noPairing.classList.add("hidden");
+          if (pairingCode) pairingCode.classList.add("hidden");
+          if (qrContainer) qrContainer.classList.add("hidden");
+
+          codeDisplay.classList.add("has-code");
+          codeDisplay.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+              <div class="loading" style="width: 2rem; height: 2rem; margin: 0 auto 1rem;"></div>
+              <p>🔄 Gerando QR Code...</p>
+              <p class="text-muted">Aguarde alguns segundos</p>
+            </div>
+          `;
+        }
+
+        clearQRWaitingState() {
+          const codeDisplay = document.getElementById("codeDisplay");
+          const noPairing = document.getElementById("noPairing");
+          const qrCodeContainer = document.getElementById("qrCodeContainer");
+          const pairingCode = document.getElementById("pairingCode");
+
+          if (!codeDisplay || !noPairing) return;
+
+          if (
+            (qrCodeContainer &&
+              !qrCodeContainer.classList.contains("hidden")) ||
+            (pairingCode && !pairingCode.classList.contains("hidden"))
+          ) {
+            return;
+          }
+
+          codeDisplay.classList.remove("has-code");
+          noPairing.classList.remove("hidden");
+          codeDisplay.innerHTML = `
+            <div id="noPairing">
+              <p class="text-muted">Nenhum código de pareamento ativo</p>
+              <p class="text-muted">Clique em "Gerar Código" para iniciar o pareamento</p>
+            </div>
+            <div id="pairingCode" class="hidden">
+              <p>Digite este código no WhatsApp:</p>
+              <div class="pairing-code" id="codeValue"></div>
+              <div id="codeTimer" class="text-muted"></div>
+            </div>
+            <div id="qrCodeContainer" class="hidden">
+              <p>Escaneie o QR Code com o WhatsApp:</p>
+              <img id="qrCodeImage" class="qr-code" alt="QR Code" />
+            </div>
+          `;
+        }
+
+        updatePairingButtons(connected, loading) {
+          const generateCodeBtn = document.getElementById("generateCodeBtn");
+          const generateQRBtn = document.getElementById("generateQRBtn");
+          const resetBtn = document.getElementById("resetSessionBtn");
+
+          if (!generateCodeBtn || !generateQRBtn || !resetBtn) {
+            console.error("Botões não encontrados!");
+            return;
+          }
+
+          if (connected) {
+            generateCodeBtn.disabled = true;
+            generateQRBtn.disabled = true;
+            generateCodeBtn.querySelector("span:last-child").textContent =
+              "✅ Conectado";
+            generateQRBtn.querySelector("span:last-child").textContent =
+              "✅ Conectado";
+
+            resetBtn.disabled = false;
+          } else if (loading) {
+            generateCodeBtn.disabled = true;
+            generateQRBtn.disabled = true;
+            resetBtn.disabled = true;
+          } else {
+            generateCodeBtn.disabled = false;
+            generateQRBtn.disabled = false;
+            resetBtn.disabled = false;
+            generateCodeBtn.querySelector("span:last-child").textContent =
+              "📱 Código";
+            generateQRBtn.querySelector("span:last-child").textContent =
+              "📷 QR Code";
+          }
+        }
+
+        forceEnablePairingButtons() {
+          const generateCodeBtn = document.getElementById("generateCodeBtn");
+          const generateQRBtn = document.getElementById("generateQRBtn");
+          const resetBtn = document.getElementById("resetSessionBtn");
+
+          if (generateCodeBtn && generateQRBtn && resetBtn) {
+            generateCodeBtn.disabled = false;
+            generateQRBtn.disabled = false;
+            resetBtn.disabled = false;
+
+            generateCodeBtn.querySelector("span:last-child").textContent =
+              "📱 Código";
+            generateQRBtn.querySelector("span:last-child").textContent =
+              "📷 QR Code";
+          }
+        }
+      }
+
+      new MedicitAdmin();
+    </script>
+  </body>
+</html>

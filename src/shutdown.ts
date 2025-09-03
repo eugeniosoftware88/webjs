@@ -34,15 +34,15 @@ export async function gracefulShutdown(
           recursive: true,
           force: true,
         });
-        logInfo("Pasta de sessão removida no desligamento");
+        logInfo("Pasta de sessao removida no desligamento");
       } catch (e) {
-        logError("Falha ao remover pasta sessão no desligamento", e);
+        logError("Falha ao remover pasta sessao no desligamento", e);
       }
     } else {
       try {
         cleanupCurrentSocket("graceful_shutdown_preserve_session");
       } catch {}
-      logInfo("Sessão preservada para próximo start (conectada)");
+      logInfo("Sessao preservada para proximo start (conectada)");
     }
 
     await new Promise<void>((resolve) => {

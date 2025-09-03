@@ -1,11 +1,13 @@
 import axios from "axios";
 import { EXTERNAL_ENDPOINT, PORT } from "./config";
+import { dynamicConfig } from "./dynamicConfig";
 import { getLogger } from "./logger";
 
-// --- Integração externa  ---
+// --- Integracao externa  ---
 async function postExternal(payload: any) {
   try {
-    await axios.post(EXTERNAL_ENDPOINT, payload, {
+    const endpoint = dynamicConfig.getExternalEndpoint() || EXTERNAL_ENDPOINT;
+    await axios.post(endpoint, payload, {
       headers: { "Content-Type": "application/vnd.api+json" },
       timeout: 8000,
     });
